@@ -1,25 +1,34 @@
 package com.example.heyaaron
 
-import android.Manifest
+import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,25 +37,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.example.heyaaron.ui.theme.HeyAaronTheme
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             HeyAaronTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    // We pass the helper functions to the screen
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     MainScreen(
-                        onStartService = { startAaronService() },
-                        onTestVoice = { testVoice() },
-                        checkNotificationAccess = { isNotificationServiceEnabled() }
+                        onStartServiceClick = { startAaronService() },
+                        onTestVoiceClick = { testVoice() }
                     )
                 }
             }
@@ -54,17 +65,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startAaronService() {
-        // Double check notification access before starting
         if (!isNotificationServiceEnabled()) {
-            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-            startActivity(intent)
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         } else {
             val intent = Intent(this, AaronService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
+            startService(intent)
         }
     }
 
@@ -81,83 +86,129 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainScreen(
-    onStartService: () -> Unit,
-    onTestVoice: () -> Unit,
-    checkNotificationAccess: () -> Boolean
-) {
+fun MainScreen(onStartServiceClick: () -> Unit, onTestVoiceClick: () -> Unit) {
     val context = LocalContext.current
-    var permissionsGranted by remember { mutableStateOf(false) }
+    val sharedPreferences = remember { context.getSharedPreferences("AaronPrefs", Context.MODE_PRIVATE) }
+    var isAaronVoiceEnabled by remember { mutableStateOf(sharedPreferences.getBoolean("isAaronVoiceEnabled", true)) }
+    var showDialog by remember { mutableStateOf(false) }
+    var elementsVisible by remember { mutableStateOf(false) }
 
-    // Prepare the list of permissions we need
-    val permissionsToRequest = mutableListOf(Manifest.permission.RECORD_AUDIO)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
-    }
-
-    // Create the launcher that handles the result
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions(),
-        onResult = { perms ->
-            // Update state: true only if ALL requested permissions are granted
-            permissionsGranted = perms.values.all { it }
-        }
-    )
-
-    // Check permissions as soon as the app starts
     LaunchedEffect(Unit) {
-        val allGranted = permissionsToRequest.all {
-            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-        }
-        permissionsGranted = allGranted
+        delay(1000)
+        elementsVisible = true
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        if (!permissionsGranted) {
-            // STATE 1: Permissions Missing
-            Text(
-                text = "Hey Aaron needs permissions to hear you.",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(16.dp)
-            )
-            Button(onClick = {
-                permissionLauncher.launch(permissionsToRequest.toTypedArray())
-            }) {
-                Text("Grant Mic & Notification Permissions")
-            }
-        } else {
-            // STATE 2: Permissions Granted
-            Text(
-                text = "Ready to listen!",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
+    Box(modifier = Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(id = R.drawable.aaron_background),
+            contentDescription = "Background Image",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
 
-            Spacer(modifier = Modifier.height(24.dp))
+        AnimatedVisibility(
+            visible = elementsVisible,
+            enter = fadeIn(animationSpec = tween(durationMillis = 1000)),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.aaron_face),
+                        contentDescription = "Aaron Face",
+                        modifier = Modifier
+                            .size(48.dp)
+                            .shadow(8.dp, shape = MaterialTheme.shapes.small)
+                            .clickable { showDialog = true }
+                            .padding(end = 8.dp)
+                    )
+                    Switch(
+                        checked = isAaronVoiceEnabled,
+                        onCheckedChange = {
+                            isAaronVoiceEnabled = it
+                            with(sharedPreferences.edit()) {
+                                putBoolean("isAaronVoiceEnabled", it)
+                                apply()
+                            }
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF1976D2))
+                    )
+                }
 
-            Button(onClick = onStartService) {
-                Text("Start Listening")
-            }
+                if (showDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showDialog = false },
+                        title = { Text("Enable Aaron's Voice") },
+                        text = { Text("Toggle this on to listen to Aaron's voice.") },
+                        confirmButton = {
+                            TextButton(onClick = { showDialog = false }) {
+                                Text("OK")
+                            }
+                        }
+                    )
+                }
 
-            // Helpful text about Notification Access
-            if (!checkNotificationAccess()) {
-                Text(
-                    text = "(Requires Notification Access)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Hey Aaron",
+                        style = MaterialTheme.typography.displayLarge.copy(
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.ExtraBold
+                        ),
+                        color = Color.White,
+                        modifier = Modifier.shadow(24.dp)
+                    )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(64.dp))
 
-            Button(onClick = onTestVoice) {
-                Text("Test Voice Now")
+                    Button(
+                        onClick = onStartServiceClick,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF1976D2),
+                            contentColor = Color.White
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp, pressedElevation = 16.dp),
+                        modifier = Modifier.shadow(12.dp, shape = MaterialTheme.shapes.medium)
+                    ) {
+                        Text("Wake up Aaron")
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = onTestVoiceClick,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF1976D2),
+                            contentColor = Color.White
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp, pressedElevation = 16.dp),
+                        modifier = Modifier.shadow(12.dp, shape = MaterialTheme.shapes.medium)
+                    ) {
+                        Text("Ssup, Aaron?")
+                    }
+                }
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DefaultPreview() {
+    HeyAaronTheme {
+        MainScreen({}, {})
     }
 }
