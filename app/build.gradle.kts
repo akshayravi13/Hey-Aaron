@@ -29,12 +29,12 @@ android {
         }
 
         val picoVoiceKey = localProperties.getProperty("PICOVOICE_ACCESS_KEY") ?: ""
+        val fishAudioApiKey = localProperties.getProperty("FISH_AUDIO_API_KEY") ?: ""
+        val fishAudioVoiceId = localProperties.getProperty("FISH_AUDIO_VOICE_ID") ?: ""
 
-        buildConfigField(
-            "String",
-            "PICOVOICE_ACCESS_KEY",
-            "\"$picoVoiceKey\""
-        )
+        buildConfigField("String", "PICOVOICE_ACCESS_KEY", "\"$picoVoiceKey\"")
+        buildConfigField("String", "FISH_AUDIO_API_KEY", "\"$fishAudioApiKey\"")
+        buildConfigField("String", "FISH_AUDIO_VOICE_ID", "\"$fishAudioVoiceId\"")
         // -------------------------------------
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -77,6 +77,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
 
     implementation("ai.picovoice:porcupine-android:4.0.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
